@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<title>DockerCoin Miner WebUI</title>
+<link rel="stylesheet" type="text/css" href="rickshaw.min.css">
+<style>
+#graph {
+    background-color: #eee;
+    width: 800px;
+    height: 400px;
+}
+#tweet {
+    color: royalblue;
+}
+</style>
+<script src="jquery.js"></script>
+<script src="d3.min.js"></script>
+<script src="rickshaw.min.js"></script>
+<script>
+
+String.prototype.format = function () {
+    var args = arguments;
+    return this.replace(/\{(\d+)\}/g, function (m, n) { return args[n]; });
+};
+
+var series = [];
+var points = []
+var graph = null;
+
+function refresh () {
+    $.ajax({ url: "json" }).done(function (data) {
+        series.push(data);
+        while (series.length < 250) {
+            data = JSON.parse(JSON.stringify(data));
+            data.now -= 1;
+            series.unshift(data);
+        }
+        while (series.length > 250) {
+            series.shift();
+        }
+        while (points.length > 0) {
+            points.pop();
+        }
+        var speed;
+        for (var i=0; i<series.length-1; i++) {
+            // Compute instantaneous speed
+            var s1 = series[i];
+            var s2 = series[i+1];
+            speed = (s2.hashes-s1.hashes)/(s2.now-s1.now);
+            points.push({ x: s2.now, y: speed });
+        }
+        $("#speed").text("~" + speed.toFixed(1) + " hashes/second");
+        var msg = ("I'm attending a @docker orchestration workshop, "
+                   + "and my #DockerCoins mining rig is crunching "
+                   + speed.toFixed(1) + " hashes/second! W00T!");
+        $("#tweet").attr(
+            "href",
+            "https://twitter.com/intent/tweet?text="+encodeURIComponent(msg)
+        );
+        if (graph == null) {
+            graph = new Rickshaw.Graph({
+                renderer: "area",
+                stroke: true,
+                width: 800,
+                height: 400,
+                element: $("#graph")[0],
+                preserve: true,
+                series: [
+                    { name: "Coins",
+                      color: "steelblue",
+                      data: points
+                    }
+                ]
+            });
+            graph.render();
+            var yAxis = new Rickshaw.Graph.Axis.Y({
+                graph: graph,
+                tickFormat: Rickshaw.Fixtures.Number.formatKMBT,
+                ticksTreatment: "glow"
+            });
+            yAxis.render();
+        } else {
+            graph.update();
+            $("text").css({
+                "font-size": "15px",
+                "font-weight": "normal",
+                "opacity": 0.5,
+            });
+        }
+    });
+}
+
+$(function () {
+    setInterval(refresh, 1000);
+});
+</script>
+</head>
+<body>
+
+<h1>DockerCoin Miner WebUI</h1>
+
+<div id="graph"></div>
+
+<h2>
+  Current mining speed:
+  <span id="speed">-</span>
+  <a id="tweet" href="#">(Tweet this!)</a>
+</h2>
+
+</body>
+</html>
